@@ -2,18 +2,15 @@ import { Command } from "commander";
 import { confirm } from "@inquirer/prompts";
 import ora from "ora";
 import { loadConfig, type Config } from "../utils/config";
-import { delay, retryWithBackoff, runWithConcurrency } from "../utils/rate-limiter";
+import { delay } from "../utils/rate-limiter";
 import { GeminiService } from "../services/gemini";
+import { classifyAndAddRepos } from "../services/classifier";
 import type { Category, CreatedList, RepoSummary } from "../types";
-import type { BatchRepoInfo } from "../prompts/classifier";
 import {
   fetchAllMyStarredRepos,
   fetchGitHubLists,
   deleteAllGitHubLists,
   createGitHubList,
-  fetchRepositoryReadme,
-  getRepositoryNodeId,
-  addRepoToGitHubLists,
   type Repo,
 } from "../api";
 
@@ -36,18 +33,14 @@ export const runCommand = new Command("run")
 
       console.log("\n🚀 Starting GitHub Stars auto-organization.\n");
 
-      // ========================================
       // Step 1: Fetch starred repos
-      // ========================================
       const allRepos = await fetchStarredRepos(config);
       if (allRepos.length === 0) {
         console.log("No starred repositories found.");
         return;
       }
 
-      // ========================================
       // Step 2: For --only-new, check existing Lists and filter
-      // ========================================
       let repos: Repo[];
       let existingLists: Map<string, CreatedList> | null = null;
       let existingCategories: Category[] | null = null;
@@ -71,9 +64,7 @@ export const runCommand = new Command("run")
         repos = allRepos;
       }
 
-      // ========================================
       // Step 3: Plan categories (if not --only-new)
-      // ========================================
       let categories: Category[];
 
       if (options.onlyNew && existingCategories) {
@@ -83,24 +74,18 @@ export const runCommand = new Command("run")
         categories = await planCategories(gemini, repos, config);
       }
 
-      // ========================================
       // Step 4: Exit here for dry run
-      // ========================================
       if (options.dryRun) {
         displayDryRunResults(categories, config, repos.length);
         return;
       }
 
-      // ========================================
       // Step 5: Delete existing Lists (if not --only-new)
-      // ========================================
       if (!options.onlyNew) {
         await deleteExistingLists(config);
       }
 
-      // ========================================
       // Step 6: Create Lists (if not --only-new)
-      // ========================================
       let createdLists: Map<string, CreatedList>;
 
       if (options.onlyNew && existingLists && existingLists.size > 0) {
@@ -110,9 +95,7 @@ export const runCommand = new Command("run")
         createdLists = await createLists(config, categories);
       }
 
-      // ========================================
       // Step 7: Classify and add to Lists
-      // ========================================
       await classifyAndAddRepos(config, gemini, repos, categories, createdLists);
 
       console.log("\n✅ Done! Stars have been organized into Lists.");
@@ -227,7 +210,7 @@ function displayDryRunResults(categories: Category[], config: Config, repoCount:
   });
 
   console.log("─".repeat(60));
-  console.log(`\n📊 Summary:`);
+  console.log("\n📊 Summary:");
   console.log(`  - Categories: ${categories.length}`);
   console.log(`  - Target repositories: ${repoCount}`);
   console.log(`  - Batch size: ${config.classifyBatchSize}`);
@@ -301,126 +284,4 @@ async function createLists(
 
   spinner.succeed(`${created} Lists created`);
   return createdLists;
-}
-
-async function classifyAndAddRepos(
-  config: Config,
-  gemini: GeminiService,
-  repos: Repo[],
-  categories: Category[],
-  createdLists: Map<string, CreatedList>,
-) {
-  const batchSize = config.classifyBatchSize;
-  const totalBatches = Math.ceil(repos.length / batchSize);
-
-  console.log(`\n📂 Classifying ${repos.length} repositories in batches of ${batchSize}...\n`);
-
-  let success = 0;
-  let failed = 0;
-
-  for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
-    const batchStart = batchIdx * batchSize;
-    const batchEnd = Math.min(batchStart + batchSize, repos.length);
-    const batchRepos = repos.slice(batchStart, batchEnd);
-
-    console.log(`── Batch ${batchIdx + 1}/${totalBatches} (${batchStart + 1}-${batchEnd}) ──`);
-
-    // Fetch README
-    const spinner = ora(`Fetching README... (0/${batchRepos.length})`).start();
-    let readmeCount = 0;
-    const batchRepoInfos: BatchRepoInfo[] = await Promise.all(
-      batchRepos.map(async (repo) => {
-        const readme = await fetchRepositoryReadme(
-          config.githubToken,
-          repo.owner.login,
-          repo.name,
-        );
-        readmeCount++;
-        spinner.text = `Fetching README... (${readmeCount}/${batchRepos.length})`;
-        return {
-          id: `${repo.owner.login}/${repo.name}`,
-          description: repo.description,
-          language: repo.language,
-          stars: repo.stargazers_count,
-          readme,
-        };
-      }),
-    );
-    spinner.succeed(`README fetched (${batchRepos.length})`);
-
-    // AI classification
-    const classifySpinner = ora("AI classifying...").start();
-    let results: Map<string, string[]>;
-    try {
-      results = await gemini.classifyRepositoriesBatch(batchRepoInfos, categories);
-      classifySpinner.succeed("Classification complete");
-    } catch (error) {
-      classifySpinner.fail("Classification failed");
-      failed += batchRepos.length;
-      continue;
-    }
-
-    // Add to Lists (with concurrency limit and retry)
-    const addSpinner = ora(`Adding to Lists...`).start();
-    const addResults = await runWithConcurrency(
-      batchRepos,
-      async (repo) => {
-        const repoId = `${repo.owner.login}/${repo.name}`;
-        const categoryNames = results.get(repoId) || [];
-
-        try {
-          const listIds = categoryNames
-            .map((name) => createdLists.get(name)?.id)
-            .filter((id): id is string => !!id);
-
-          if (listIds.length === 0) {
-            return { repoId, success: false, error: "No matching category" };
-          }
-
-          // Retry with exponential backoff for GitHub API errors
-          await retryWithBackoff(async () => {
-            const repoNodeId = await getRepositoryNodeId(
-              config.githubToken,
-              repo.owner.login,
-              repo.name,
-            );
-            await addRepoToGitHubLists(config.githubToken, repoNodeId, listIds);
-          }, { maxRetries: 3, initialDelayMs: 500 });
-
-          return { repoId, success: true, categories: categoryNames };
-        } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          return { repoId, success: false, error: errMsg };
-        }
-      },
-      5, // Concurrency limit: 5 parallel requests
-    );
-
-    // Count results
-    for (const result of addResults) {
-      if (result.success) {
-        success++;
-      } else {
-        failed++;
-      }
-    }
-    addSpinner.succeed(`Added to Lists (${batchRepos.length})`);
-
-    // Output results
-    for (const result of addResults) {
-      if (result.success && result.categories) {
-        console.log(`  ✅ ${result.repoId} → ${result.categories.slice(0, 2).join(", ")}`);
-      } else {
-        console.log(`  ❌ ${result.repoId} (${result.error})`);
-      }
-    }
-
-    if (batchIdx < totalBatches - 1) {
-      await delay(config.batchDelay);
-    }
-  }
-
-  console.log("\n📊 Results:");
-  console.log(`  ✅ Success: ${success}`);
-  console.log(`  ❌ Failed: ${failed}`);
 }

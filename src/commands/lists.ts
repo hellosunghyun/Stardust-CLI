@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { confirm, input } from "@inquirer/prompts";
+import { confirm } from "@inquirer/prompts";
 import ora from "ora";
 import { loadConfig } from "../utils/config";
 import {
@@ -7,7 +7,6 @@ import {
   deleteAllGitHubLists,
   deleteGitHubList,
   createGitHubList,
-  updateGitHubList,
 } from "../api";
 
 export const listsCommand = new Command("lists")

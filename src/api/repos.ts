@@ -1,3 +1,4 @@
+import { graphql, restPaginated, GitHubAPIError } from "./client";
 import type { Repo } from "./types";
 
 export type ProgressCallback = (current: number, message?: string) => void;
@@ -10,37 +11,19 @@ export async function fetchAllMyRepos(
   owner: string,
   onProgress?: ProgressCallback,
 ): Promise<{ repos?: Repo[]; status: number }> {
-  const allRepos: Repo[] = [];
-  let page = 1;
-
-  while (true) {
-    const response = await fetch(
-      `https://api.github.com/user/repos?page=${page}&per_page=100&sort=updated`,
-      {
-        headers: {
-          "User-Agent": "Stardust-CLI",
-          Authorization: `token ${token}`,
-        },
-      },
+  try {
+    const repos = await restPaginated<Repo>(
+      token,
+      "/user/repos?sort=updated",
+      onProgress,
     );
-
-    if (!response.ok) {
-      console.log("notok", await response.text());
-      return { status: response.status };
+    return { status: 200, repos };
+  } catch (error) {
+    if (error instanceof GitHubAPIError && error.statusCode) {
+      return { status: error.statusCode };
     }
-
-    const newRepos: Repo[] = await response.json();
-    allRepos.push(...newRepos);
-
-    onProgress?.(allRepos.length);
-
-    if (newRepos.length < 100) {
-      break;
-    }
-    page++;
+    throw error;
   }
-
-  return { status: 200, repos: allRepos };
 }
 
 /**
@@ -51,37 +34,25 @@ export async function fetchAllMyStarredRepos(
   owner: string,
   onProgress?: ProgressCallback,
 ): Promise<{ repos?: Repo[]; status: number }> {
-  const allRepos: Repo[] = [];
-  let page = 1;
-
-  while (true) {
-    const response = await fetch(
-      `https://api.github.com/user/starred?page=${page}&per_page=100&sort=updated`,
-      {
-        headers: {
-          "User-Agent": "Stardust-CLI",
-          Authorization: `token ${token}`,
-        },
-      },
+  try {
+    const repos = await restPaginated<Repo>(
+      token,
+      "/user/starred?sort=updated",
+      onProgress,
     );
-
-    if (!response.ok) {
-      console.log("notok", await response.text());
-      return { status: response.status };
+    return { status: 200, repos };
+  } catch (error) {
+    if (error instanceof GitHubAPIError && error.statusCode) {
+      return { status: error.statusCode };
     }
-
-    const newRepos: Repo[] = await response.json();
-    allRepos.push(...newRepos);
-
-    onProgress?.(allRepos.length);
-
-    if (newRepos.length < 100) {
-      break;
-    }
-    page++;
+    throw error;
   }
+}
 
-  return { status: 200, repos: allRepos };
+interface RepositoryNodeIdResponse {
+  repository: {
+    id: string;
+  } | null;
 }
 
 /**
@@ -92,48 +63,23 @@ export async function getRepositoryNodeId(
   owner: string,
   name: string,
 ): Promise<string> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
   if (!owner || !name) {
     throw new Error("Missing repository owner or name parameter");
   }
 
   const query = `
-    query {
-      repository(owner: "${owner}", name: "${name}") {
+    query GetRepositoryNodeId($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
         id
       }
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-  });
+  const data = await graphql<RepositoryNodeIdResponse>(token, query, { owner, name });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  if (!data.data?.repository?.id) {
+  if (!data.repository?.id) {
     throw new Error("Repository not found or ID not available");
   }
 
-  return data.data.repository.id;
+  return data.repository.id;
 }

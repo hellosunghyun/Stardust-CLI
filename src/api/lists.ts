@@ -1,4 +1,67 @@
-import type { FormattedResponse, FormattedGitHubList, GitHubList } from "./types";
+import { graphql } from "./client";
+import type { FormattedResponse, GitHubList, GitHubListItem } from "./types";
+
+// GraphQL response types
+interface UserListsResponse {
+  user: {
+    lists: {
+      totalCount: number;
+      nodes: GitHubList[];
+    };
+  } | null;
+}
+
+interface CreateListResponse {
+  createUserList: {
+    list: {
+      id: string;
+      name: string;
+      description: string | null;
+      isPrivate: boolean;
+      slug: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+    viewer: { login: string };
+  };
+}
+
+interface UpdateListResponse {
+  updateUserList: {
+    list: {
+      id: string;
+      name: string;
+      description: string | null;
+      isPrivate: boolean;
+      slug: string;
+      updatedAt: string;
+    };
+  };
+}
+
+interface DeleteListResponse {
+  deleteUserList: {
+    user: { login: string };
+  };
+}
+
+interface UpdateUserListsForItemResponse {
+  updateUserListsForItem: {
+    lists: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+    }>;
+    item: {
+      name: string;
+      url: string;
+      isPrivate?: boolean;
+      description?: string | null;
+      stargazerCount?: number;
+      owner?: { login: string };
+    };
+  };
+}
 
 /**
  * Fetches all GitHub lists and their repositories for a given user
@@ -11,13 +74,9 @@ export async function fetchGitHubLists(
     throw new Error("Missing GitHub username parameter");
   }
 
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
   const query = `
-    query {
-      user(login: "${username}") {
+    query FetchUserLists($username: String!) {
+      user(login: $username) {
         lists(first: 100) {
           totalCount
           nodes {
@@ -49,64 +108,37 @@ export async function fetchGitHubLists(
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-  });
+  const data = await graphql<UserListsResponse>(token, query, { username });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  if (!data.data?.user?.lists) {
+  if (!data.user?.lists) {
     throw new Error("GitHub API returned unexpected data structure");
   }
 
-  const formattedData: FormattedResponse = {
+  return {
     username,
-    totalLists: data.data.user.lists.totalCount,
-    lists: data.data.user.lists.nodes.map((list: GitHubList) => {
-      return {
-        id: list.id,
-        name: list.name,
-        description: list.description,
-        isPrivate: list.isPrivate,
-        slug: list.slug,
-        createdAt: list.createdAt,
-        updatedAt: list.updatedAt,
-        lastAddedAt: list.lastAddedAt,
-        totalRepositories: list.items.totalCount,
-        repositories: list.items.nodes
-          .filter((item) => item.__typename === "Repository")
-          .map((repo) => {
-            return {
-              name: repo.name,
-              url: repo.url,
-              isPrivate: repo.isPrivate,
-              description: repo.description,
-              stars: repo.stargazerCount,
-              owner: repo.owner.login,
-            };
-          }),
-      };
-    }),
+    totalLists: data.user.lists.totalCount,
+    lists: data.user.lists.nodes.map((list) => ({
+      id: list.id,
+      name: list.name,
+      description: list.description,
+      isPrivate: list.isPrivate,
+      slug: list.slug,
+      createdAt: list.createdAt,
+      updatedAt: list.updatedAt,
+      lastAddedAt: list.lastAddedAt,
+      totalRepositories: list.items.totalCount,
+      repositories: list.items.nodes
+        .filter((item): item is GitHubListItem => item.__typename === "Repository")
+        .map((repo) => ({
+          name: repo.name,
+          url: repo.url,
+          isPrivate: repo.isPrivate,
+          description: repo.description,
+          stars: repo.stargazerCount,
+          owner: repo.owner.login,
+        })),
+    })),
   };
-
-  return formattedData;
 }
 
 /**
@@ -117,17 +149,13 @@ export async function createGitHubList(
   name: string,
   description?: string,
   isPrivate: boolean = true,
-): Promise<any> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
+): Promise<CreateListResponse["createUserList"]> {
   const mutation = `
-    mutation {
+    mutation CreateUserList($name: String!, $description: String, $isPrivate: Boolean!) {
       createUserList(input: {
-        name: "${name}",
-        description: ${description ? `"${description}"` : "null"},
-        isPrivate: ${isPrivate}
+        name: $name,
+        description: $description,
+        isPrivate: $isPrivate
       }) {
         list {
           id
@@ -145,30 +173,13 @@ export async function createGitHubList(
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: mutation }),
+  const data = await graphql<CreateListResponse>(token, mutation, {
+    name,
+    description: description || null,
+    isPrivate,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data.createUserList;
+  return data.createUserList;
 }
 
 /**
@@ -177,31 +188,23 @@ export async function createGitHubList(
 export async function updateGitHubList(
   token: string,
   listId: string,
-  name?: string,
-  description?: string,
-  isPrivate?: boolean,
-): Promise<any> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
+  updates: {
+    name?: string;
+    description?: string | null;
+    isPrivate?: boolean;
+  },
+): Promise<UpdateListResponse["updateUserList"]> {
   if (!listId) {
     throw new Error("Missing list ID parameter");
   }
 
-  const inputParams: string[] = [];
-  if (name !== undefined) inputParams.push(`name: "${name}"`);
-  if (description !== undefined)
-    inputParams.push(
-      `description: ${description ? `"${description}"` : "null"}`,
-    );
-  if (isPrivate !== undefined) inputParams.push(`isPrivate: ${isPrivate}`);
-
   const mutation = `
-    mutation {
+    mutation UpdateUserList($listId: ID!, $name: String, $description: String, $isPrivate: Boolean) {
       updateUserList(input: {
-        listId: "${listId}",
-        ${inputParams.join(",")}
+        listId: $listId,
+        name: $name,
+        description: $description,
+        isPrivate: $isPrivate
       }) {
         list {
           id
@@ -215,30 +218,14 @@ export async function updateGitHubList(
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: mutation }),
+  const data = await graphql<UpdateListResponse>(token, mutation, {
+    listId,
+    name: updates.name,
+    description: updates.description,
+    isPrivate: updates.isPrivate,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data.updateUserList;
+  return data.updateUserList;
 }
 
 /**
@@ -247,19 +234,15 @@ export async function updateGitHubList(
 export async function deleteGitHubList(
   token: string,
   listId: string,
-): Promise<any> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
+): Promise<DeleteListResponse["deleteUserList"]> {
   if (!listId) {
     throw new Error("Missing list ID parameter");
   }
 
   const mutation = `
-    mutation {
+    mutation DeleteUserList($listId: ID!) {
       deleteUserList(input: {
-        listId: "${listId}"
+        listId: $listId
       }) {
         user {
           login
@@ -268,30 +251,8 @@ export async function deleteGitHubList(
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: mutation }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data.deleteUserList;
+  const data = await graphql<DeleteListResponse>(token, mutation, { listId });
+  return data.deleteUserList;
 }
 
 /**
@@ -301,11 +262,7 @@ export async function addRepoToGitHubLists(
   token: string,
   repositoryId: string,
   listIds: string[],
-): Promise<any> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
+): Promise<UpdateUserListsForItemResponse["updateUserListsForItem"]> {
   if (!repositoryId) {
     throw new Error("Missing repository ID parameter");
   }
@@ -315,10 +272,10 @@ export async function addRepoToGitHubLists(
   }
 
   const mutation = `
-    mutation {
+    mutation AddRepoToLists($itemId: ID!, $listIds: [ID!]!) {
       updateUserListsForItem(input: {
-        itemId: "${repositoryId}",
-        listIds: [${listIds.map((id) => `"${id}"`).join(", ")}]
+        itemId: $itemId,
+        listIds: $listIds
       }) {
         lists {
           id
@@ -332,39 +289,19 @@ export async function addRepoToGitHubLists(
             isPrivate
             description
             stargazerCount
-            owner {
-              login
-            }
+            owner { login }
           }
         }
       }
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: mutation }),
+  const data = await graphql<UpdateUserListsForItemResponse>(token, mutation, {
+    itemId: repositoryId,
+    listIds,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data.updateUserListsForItem;
+  return data.updateUserListsForItem;
 }
 
 /**
@@ -375,11 +312,7 @@ export async function removeRepoFromGitHubLists(
   repositoryId: string,
   currentListIds: string[],
   listsToRemoveFrom: string[],
-): Promise<any> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
+): Promise<UpdateUserListsForItemResponse["updateUserListsForItem"]> {
   if (!repositoryId) {
     throw new Error("Missing repository ID parameter");
   }
@@ -393,10 +326,10 @@ export async function removeRepoFromGitHubLists(
   );
 
   const mutation = `
-    mutation {
+    mutation RemoveRepoFromLists($itemId: ID!, $listIds: [ID!]!) {
       updateUserListsForItem(input: {
-        itemId: "${repositoryId}",
-        listIds: [${updatedListIds.map((id) => `"${id}"`).join(", ")}]
+        itemId: $itemId,
+        listIds: $listIds
       }) {
         lists {
           id
@@ -413,30 +346,12 @@ export async function removeRepoFromGitHubLists(
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: mutation }),
+  const data = await graphql<UpdateUserListsForItemResponse>(token, mutation, {
+    itemId: repositoryId,
+    listIds: updatedListIds,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data.updateUserListsForItem;
+  return data.updateUserListsForItem;
 }
 
 /**
@@ -445,19 +360,15 @@ export async function removeRepoFromGitHubLists(
 export async function removeRepoFromAllLists(
   token: string,
   repositoryId: string,
-): Promise<any> {
-  if (!token) {
-    throw new Error("Missing GitHub token parameter");
-  }
-
+): Promise<UpdateUserListsForItemResponse["updateUserListsForItem"]> {
   if (!repositoryId) {
     throw new Error("Missing repository ID parameter");
   }
 
   const mutation = `
-    mutation {
+    mutation RemoveRepoFromAllLists($itemId: ID!) {
       updateUserListsForItem(input: {
-        itemId: "${repositoryId}",
+        itemId: $itemId,
         listIds: []
       }) {
         lists {
@@ -474,30 +385,11 @@ export async function removeRepoFromAllLists(
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      "User-Agent": "Stardust-CLI",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: mutation }),
+  const data = await graphql<UpdateUserListsForItemResponse>(token, mutation, {
+    itemId: repositoryId,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `GitHub API request failed (${response.status}): ${errorText}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data.updateUserListsForItem;
+  return data.updateUserListsForItem;
 }
 
 export type DeleteProgressCallback = (deleted: number, total: number) => void;
@@ -520,7 +412,8 @@ export async function deleteAllGitHubLists(
       deletedCount++;
       onProgress?.(deletedCount, total);
     } catch (error) {
-      console.error(`Failed to delete list "${list.name}":`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Failed to delete list "${list.name}": ${message}`);
     }
   }
 

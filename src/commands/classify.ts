@@ -3,18 +3,15 @@ import { confirm } from "@inquirer/prompts";
 import ora from "ora";
 import { loadConfig } from "../utils/config";
 import { loadPlan } from "../utils/plan-storage";
-import { delay, retryWithBackoff, runWithConcurrency } from "../utils/rate-limiter";
+import { delay } from "../utils/rate-limiter";
 import { GeminiService } from "../services/gemini";
+import { classifyAndAddRepos } from "../services/classifier";
 import type { Category, CreatedList } from "../types";
-import type { BatchRepoInfo } from "../prompts/classifier";
 import {
   fetchAllMyStarredRepos,
   fetchGitHubLists,
-  fetchRepositoryReadme,
   getRepositoryNodeId,
-  addRepoToGitHubLists,
   removeRepoFromAllLists,
-  type Repo,
 } from "../api";
 
 export const classifyCommand = new Command("classify")
@@ -129,128 +126,6 @@ export const classifyCommand = new Command("classify")
     }
   });
 
-async function classifyAndAddRepos(
-  config: ReturnType<typeof loadConfig>,
-  gemini: GeminiService,
-  repos: Repo[],
-  categories: Category[],
-  createdLists: Map<string, CreatedList>,
-) {
-  const batchSize = config.classifyBatchSize;
-  const totalBatches = Math.ceil(repos.length / batchSize);
-
-  console.log(`\n📂 Classifying ${repos.length} repositories in batches of ${batchSize}...\n`);
-
-  let success = 0;
-  let failed = 0;
-
-  for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
-    const batchStart = batchIdx * batchSize;
-    const batchEnd = Math.min(batchStart + batchSize, repos.length);
-    const batchRepos = repos.slice(batchStart, batchEnd);
-
-    console.log(`── Batch ${batchIdx + 1}/${totalBatches} (${batchStart + 1}-${batchEnd}) ──`);
-
-    // Fetch README
-    const spinner = ora(`Fetching README... (0/${batchRepos.length})`).start();
-    let readmeCount = 0;
-    const batchRepoInfos: BatchRepoInfo[] = await Promise.all(
-      batchRepos.map(async (repo) => {
-        const readme = await fetchRepositoryReadme(
-          config.githubToken,
-          repo.owner.login,
-          repo.name,
-        );
-        readmeCount++;
-        spinner.text = `Fetching README... (${readmeCount}/${batchRepos.length})`;
-        return {
-          id: `${repo.owner.login}/${repo.name}`,
-          description: repo.description,
-          language: repo.language,
-          stars: repo.stargazers_count,
-          readme,
-        };
-      }),
-    );
-    spinner.succeed(`README fetched (${batchRepos.length})`);
-
-    // AI classification
-    const classifySpinner = ora("AI classifying...").start();
-    let results: Map<string, string[]>;
-    try {
-      results = await gemini.classifyRepositoriesBatch(batchRepoInfos, categories);
-      classifySpinner.succeed("Classification complete");
-    } catch (error) {
-      classifySpinner.fail("Classification failed");
-      failed += batchRepos.length;
-      continue;
-    }
-
-    // Add to Lists (with concurrency limit and retry)
-    const addSpinner = ora(`Adding to Lists...`).start();
-    const addResults = await runWithConcurrency(
-      batchRepos,
-      async (repo) => {
-        const repoId = `${repo.owner.login}/${repo.name}`;
-        const categoryNames = results.get(repoId) || [];
-
-        try {
-          const listIds = categoryNames
-            .map((name) => createdLists.get(name)?.id)
-            .filter((id): id is string => !!id);
-
-          if (listIds.length === 0) {
-            return { repoId, success: false, error: "No matching category" };
-          }
-
-          // Retry with exponential backoff for GitHub API errors
-          await retryWithBackoff(async () => {
-            const repoNodeId = await getRepositoryNodeId(
-              config.githubToken,
-              repo.owner.login,
-              repo.name,
-            );
-            await addRepoToGitHubLists(config.githubToken, repoNodeId, listIds);
-          }, { maxRetries: 3, initialDelayMs: 500 });
-
-          return { repoId, success: true, categories: categoryNames };
-        } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          return { repoId, success: false, error: errMsg };
-        }
-      },
-      5, // Concurrency limit: 5 parallel requests
-    );
-
-    // Count results
-    for (const result of addResults) {
-      if (result.success) {
-        success++;
-      } else {
-        failed++;
-      }
-    }
-    addSpinner.succeed(`Added to Lists (${batchRepos.length})`);
-
-    // Output results
-    for (const result of addResults) {
-      if (result.success && result.categories) {
-        console.log(`  ✅ ${result.repoId} → ${result.categories.slice(0, 2).join(", ")}`);
-      } else {
-        console.log(`  ❌ ${result.repoId} (${result.error})`);
-      }
-    }
-
-    if (batchIdx < totalBatches - 1) {
-      await delay(config.batchDelay);
-    }
-  }
-
-  console.log("\n📊 Results:");
-  console.log(`  ✅ Success: ${success}`);
-  console.log(`  ❌ Failed: ${failed}`);
-}
-
 async function handleReset(config: ReturnType<typeof loadConfig>) {
   console.log("\n🔄 Removing Stars from Lists.\n");
 
@@ -298,7 +173,7 @@ async function handleReset(config: ReturnType<typeof loadConfig>) {
   let removed = 0;
   let failed = 0;
 
-  for (const [key, repo] of reposInLists) {
+  for (const [, repo] of reposInLists) {
     try {
       const repoNodeId = await getRepositoryNodeId(
         config.githubToken,
@@ -308,14 +183,14 @@ async function handleReset(config: ReturnType<typeof loadConfig>) {
       await removeRepoFromAllLists(config.githubToken, repoNodeId);
       removed++;
       await delay(config.githubRequestDelay);
-    } catch (error) {
+    } catch {
       failed++;
     }
     removeSpinner.text = `Removing from Lists... (${removed + failed}/${reposInLists.size})`;
   }
 
-  removeSpinner.succeed(`Removal complete`);
-  console.log(`\n📊 Results:`);
+  removeSpinner.succeed("Removal complete");
+  console.log("\n📊 Results:");
   console.log(`  ✅ Success: ${removed}`);
   console.log(`  ❌ Failed: ${failed}`);
 }

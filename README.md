@@ -1,4 +1,8 @@
-# ✨ Stardust CLI
+# Stardust CLI
+
+English | [한국어](README.ko.md)
+
+> If you find this project useful, please consider giving it a star! Your support means a lot.
 
 AI-powered CLI tool to automatically organize your GitHub Stars into Lists.
 
@@ -287,6 +291,7 @@ stardust-cli/
     ├── types.ts              # Type definitions
     ├── api/
     │   ├── index.ts          # API exports
+    │   ├── client.ts         # GitHub API client
     │   ├── types.ts          # API types
     │   ├── lists.ts          # Lists CRUD
     │   ├── repos.ts          # Repository queries
@@ -298,7 +303,9 @@ stardust-cli/
     │   ├── classify.ts       # classify command
     │   └── run.ts            # run command (full automation)
     ├── services/
-    │   └── gemini.ts         # Gemini AI service
+    │   ├── index.ts          # Services exports
+    │   ├── gemini.ts         # Gemini AI service
+    │   └── classifier.ts     # Classification service
     ├── prompts/
     │   ├── category-planner.ts
     │   └── classifier.ts

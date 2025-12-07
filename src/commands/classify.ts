@@ -199,7 +199,7 @@ async function classifyAndAddRepos(
             .filter((id): id is string => !!id);
 
           if (listIds.length === 0) {
-            return { repoId, success: false };
+            return { repoId, success: false, error: "No matching category" };
           }
 
           const repoNodeId = await getRepositoryNodeId(
@@ -210,7 +210,8 @@ async function classifyAndAddRepos(
           await addRepoToGitHubLists(config.githubToken, repoNodeId, listIds);
           return { repoId, success: true, categories: categoryNames };
         } catch (error) {
-          return { repoId, success: false };
+          const errMsg = error instanceof Error ? error.message : String(error);
+          return { repoId, success: false, error: errMsg };
         }
       }),
     );
@@ -230,7 +231,7 @@ async function classifyAndAddRepos(
       if (result.success && result.categories) {
         console.log(`  ✅ ${result.repoId} → ${result.categories.slice(0, 2).join(", ")}`);
       } else {
-        console.log(`  ❌ ${result.repoId}`);
+        console.log(`  ❌ ${result.repoId} (${result.error})`);
       }
     }
 

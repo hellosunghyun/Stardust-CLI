@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { config } from "dotenv";
 import { Command } from "commander";
 import { listsCommand } from "./commands/lists";
 import { planCommand } from "./commands/plan";
@@ -6,6 +7,9 @@ import { createListsCommand } from "./commands/create-lists";
 import { classifyCommand } from "./commands/classify";
 import { runCommand } from "./commands/run";
 import { checkForUpdates } from "./utils/update-checker";
+
+// Load .env file from current working directory
+config();
 
 // Check for updates in the background (non-blocking)
 checkForUpdates();

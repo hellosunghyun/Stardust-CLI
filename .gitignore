@@ -23,7 +23,7 @@ npm-debug.log*
 
 # Plan storage (contains user-specific data)
 .github-stars-plan.json
-.stardust-plan.json
+.startidy-plan.json
 
 # Bun
 bun.lockb

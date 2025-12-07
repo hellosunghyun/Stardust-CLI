@@ -70,7 +70,7 @@ export const createListsCommand = new Command("create-lists")
       }
 
       console.log("\n📌 Next step:");
-      console.log("  Classify Stars: stardust classify");
+      console.log("  Classify Stars: startidy classify");
     } catch (error) {
       console.error("\n❌ Error:", (error as Error).message);
       process.exit(1);

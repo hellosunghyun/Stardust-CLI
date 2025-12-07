@@ -73,16 +73,16 @@ export const planCommand = new Command("plan")
 
       // Step 3: Save plan
       savePlan(categories, repos.length);
-      console.log("\n💾 Plan has been saved. (.stardust-plan.json)");
+      console.log("\n💾 Plan has been saved. (.startidy-plan.json)");
 
       // Step 4: Display results
       displayPlan(categories, repos.length, new Date().toISOString());
 
       console.log("\n📌 Next steps:");
-      console.log("  1. Delete existing Lists: stardust lists --delete-all");
-      console.log("  2. Create Lists: stardust create-lists");
-      console.log("  3. Classify Stars: stardust classify");
-      console.log("\n  Or run full automation: stardust run");
+      console.log("  1. Delete existing Lists: startidy lists --delete-all");
+      console.log("  2. Create Lists: startidy create-lists");
+      console.log("  3. Classify Stars: startidy classify");
+      console.log("\n  Or run full automation: startidy run");
     } catch (error) {
       console.error("\n❌ Error:", (error as Error).message);
       process.exit(1);

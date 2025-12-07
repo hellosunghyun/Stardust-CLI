@@ -1,0 +1,166 @@
+{
+  "createdAt": "2025-12-07T13:38:13.058Z",
+  "repoCount": 1837,
+  "categories": [
+    {
+      "name": "AI: Agents",
+      "description": "Repositories focused on AI agents, including coding agents, autonomous agents, and agent frameworks.",
+      "keywords": []
+    },
+    {
+      "name": "AI: LLM & RAG",
+      "description": "Repositories related to Large Language Models (LLMs), Retrieval-Augmented Generation (RAG) systems, and related frameworks and models.",
+      "keywords": []
+    },
+    {
+      "name": "AI: ML Frameworks",
+      "description": "Machine learning frameworks and libraries like TensorFlow, PyTorch, JAX, and general ML utilities.",
+      "keywords": []
+    },
+    {
+      "name": "AI: Gen & Vision",
+      "description": "Projects involving generative AI for image, video, and audio, as well as computer vision and speech processing.",
+      "keywords": []
+    },
+    {
+      "name": "AI: Data & MLOps",
+      "description": "Tools and platforms for AI data analysis, MLOps, and specific AI-driven data processing.",
+      "keywords": []
+    },
+    {
+      "name": "AI: ETC",
+      "description": "Miscellaneous artificial intelligence related projects not fitting into other AI categories.",
+      "keywords": []
+    },
+    {
+      "name": "Web: Frontend UI",
+      "description": "Frontend development frameworks, UI kits, component libraries, and related tools for web interfaces.",
+      "keywords": []
+    },
+    {
+      "name": "Web: Backend & API",
+      "description": "Backend development frameworks, API tools, ORMs, GraphQL, and server-side technologies.",
+      "keywords": []
+    },
+    {
+      "name": "Web: Fullstack",
+      "description": "Fullstack development frameworks, SaaS boilerplates, and integrated web application platforms.",
+      "keywords": []
+    },
+    {
+      "name": "Web: CMS & Apps",
+      "description": "Headless CMS, internal tools, business applications, and alternative productivity apps.",
+      "keywords": []
+    },
+    {
+      "name": "Web: Dev Tools",
+      "description": "Web development tools including bundlers, testing frameworks, browser automation, and API clients.",
+      "keywords": []
+    },
+    {
+      "name": "Web: ETC",
+      "description": "Miscellaneous web development projects not fitting into other Web categories.",
+      "keywords": []
+    },
+    {
+      "name": "Infra: Cloud & K8s",
+      "description": "Cloud computing, Kubernetes, Docker, serverless platforms, and container orchestration.",
+      "keywords": []
+    },
+    {
+      "name": "Infra: Databases",
+      "description": "SQL, NoSQL, vector, and time-series databases, along with database management tools.",
+      "keywords": []
+    },
+    {
+      "name": "Infra: Monitoring",
+      "description": "Observability, logging, APM, and metrics collection and visualization tools.",
+      "keywords": []
+    },
+    {
+      "name": "Infra: Automation",
+      "description": "CI/CD, workflow orchestration, configuration management, and data pipeline automation.",
+      "keywords": []
+    },
+    {
+      "name": "Infra: Security",
+      "description": "Authentication, secrets management, security scanning, and network security tools.",
+      "keywords": []
+    },
+    {
+      "name": "Infra: ETC",
+      "description": "Miscellaneous infrastructure and DevOps projects not fitting into other Infra categories.",
+      "keywords": []
+    },
+    {
+      "name": "MC: Server Core",
+      "description": "Minecraft server implementations, including Paper, Purpur, Minestom, and custom server cores.",
+      "keywords": []
+    },
+    {
+      "name": "MC: Mods & Plugins",
+      "description": "Gameplay modifications, server plugins, and APIs for extending Minecraft functionality.",
+      "keywords": []
+    },
+    {
+      "name": "MC: Client Mods",
+      "description": "Client-side mods for performance, utility, and graphical enhancements in Minecraft.",
+      "keywords": []
+    },
+    {
+      "name": "MC: Tools & Data",
+      "description": "Minecraft modding tools, data packs, resource packs, map generation, and asset management.",
+      "keywords": []
+    },
+    {
+      "name": "MC: AI & Bots",
+      "description": "AI agents, bots, and automation projects specifically for Minecraft environments.",
+      "keywords": []
+    },
+    {
+      "name": "MC: ETC",
+      "description": "Miscellaneous Minecraft-related projects not fitting into other MC categories.",
+      "keywords": []
+    },
+    {
+      "name": "Lang: Python",
+      "description": "Libraries, frameworks, and projects specifically written in Python.",
+      "keywords": []
+    },
+    {
+      "name": "Lang: JS & TS",
+      "description": "Libraries, frameworks, and projects specifically written in JavaScript and TypeScript.",
+      "keywords": []
+    },
+    {
+      "name": "Lang: Java & Kotlin",
+      "description": "Libraries, frameworks, and projects specifically written in Java and Kotlin.",
+      "keywords": []
+    },
+    {
+      "name": "Lang: Rust & Go",
+      "description": "Libraries, frameworks, and projects specifically written in Rust and Go.",
+      "keywords": []
+    },
+    {
+      "name": "Lang: Other",
+      "description": "Projects in other programming languages such as Swift, C++, C, PHP, Ruby, Dart, Zig, Lua, etc.",
+      "keywords": []
+    },
+    {
+      "name": "Lang: ETC",
+      "description": "Miscellaneous language-related tools, specific language concepts, or unclassified language projects.",
+      "keywords": []
+    },
+    {
+      "name": "Dev: Tools & Apps",
+      "description": "General purpose desktop applications, CLI tools, and self-hosted software alternatives.",
+      "keywords": []
+    },
+    {
+      "name": "Learn: Resources",
+      "description": "Educational roadmaps, awesome lists, tutorials, guides, and interview preparation materials.",
+      "keywords": []
+    }
+  ]
+}

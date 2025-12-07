@@ -1,6 +1,6 @@
 {
   "name": "startidy",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "AI-powered CLI tool to automatically organize your GitHub Stars into Lists",
   "type": "module",
   "bin": {

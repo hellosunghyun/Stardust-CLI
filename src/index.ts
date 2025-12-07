@@ -17,7 +17,7 @@ void checkForUpdates();
 const program = new Command();
 
 program
-  .name("stardust")
+  .name("startidy")
   .description("AI-powered CLI tool to automatically organize your GitHub Stars into Lists")
   .version("1.0.0")
   .option("--token <token>", "GitHub Personal Access Token")

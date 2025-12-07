@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import type { Category } from "../types";
 
-const PLAN_FILE = ".stardust-plan.json";
+const PLAN_FILE = ".startidy-plan.json";
 
 export interface StoredPlan {
   createdAt: string;

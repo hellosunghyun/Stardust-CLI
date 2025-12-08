@@ -1,2 +1,5 @@
 # Exclude package-lock.json from language statistics
 package-lock.json linguist-generated=true
+
+# Force src/index.ts to be recognized as TypeScript (has node shebang)
+src/index.ts linguist-language=TypeScript

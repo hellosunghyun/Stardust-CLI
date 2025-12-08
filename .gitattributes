@@ -1,0 +1,2 @@
+# Exclude package-lock.json from language statistics
+package-lock.json linguist-generated=true
